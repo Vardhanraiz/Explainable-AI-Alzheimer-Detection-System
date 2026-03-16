@@ -1,78 +1,10 @@
 import streamlit as st
-import streamlit_authenticator as stauth
-import yaml
-from yaml.loader import SafeLoader
-
-with open("database/users.yaml") as file:
-    config = yaml.load(file, Loader=SafeLoader)
-
-authenticator = stauth.Authenticate(
-    config["credentials"],
-    config["cookie"]["name"],
-    config["cookie"]["key"],
-    config["cookie"]["expiry_days"]
-)
-
-name, authentication_status, username = authenticator.login("Login", "main")
-
-if authentication_status == False:
-    st.error("Username or password is incorrect")
-
-elif authentication_status == None:
-    st.warning("Please enter your username and password")
-
-st.set_page_config(
-    page_title="Alzheimer AI Platform",
-    layout="wide"
-)
-
-
-elif authentication_status:
-
-    authenticator.logout("Logout", "sidebar")
-
-    st.sidebar.success(f"Welcome {name}")
-
-    st.title("Alzheimer AI System Dashboard")
-
-
-st.set_page_config(
-    page_title="Alzheimer AI Platform",
-    layout="wide"
-)
-page = st.sidebar.radio(
-    "Navigation",
-    [
-        "Dashboard",
-        "Upload MRI",
-        "Patient History",
-        "About System"
-    ]
-)
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.metric("Total Scans", 120)
-
-with col2:
-    st.metric("Patients", 60)
-
-with col3:
-    st.metric("Model Accuracy", "74%")
-
-import matplotlib.pyplot as plt
-
-labels = ["Non", "Very Mild", "Mild", "Moderate"]
-
-plt.bar(labels, preds[0])
-
-st.pyplot(plt)
-import streamlit as st
 import tensorflow as tf
 import numpy as np
 import cv2
+import pandas as pd
 from PIL import Image
+from datetime import datetime
 
 from lime import lime_image
 from skimage.segmentation import mark_boundaries
@@ -81,52 +13,43 @@ from skimage.segmentation import mark_boundaries
 # PAGE CONFIG
 # ======================================================
 st.set_page_config(
-    page_title="Alzheimer MRI Analysis",
+    page_title="Alzheimer AI Platform",
     page_icon="🧠",
     layout="wide"
 )
 
 # ======================================================
-# SIDEBAR (Context + Dataset Info)
+# SIMPLE LOGIN SYSTEM
+# ======================================================
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+def login():
+    if username == "doctor1" and password == "1234":
+        st.session_state.logged_in = True
+    else:
+        st.error("Invalid credentials")
+
+if not st.session_state.logged_in:
+
+    st.title("🧠 Alzheimer AI Platform Login")
+
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+
+    st.button("Login", on_click=login)
+
+    st.stop()
+
+# ======================================================
+# SIDEBAR
 # ======================================================
 with st.sidebar:
-    st.markdown("## 🧠 Alzheimer MRI Analyzer")
+    st.success("Logged in successfully")
 
-    st.markdown(
-        """
-        **Purpose**  
-        Academic AI system for analyzing brain MRI scans  
-
-        **Approach**  
-        Transfer Learning + Explainable AI (XAI)  
-
-        **Explainability**  
-        Grad-CAM and LIME  
-
-        **Disclaimer**  
-        This tool is for academic and research use only.  
-        Not intended for clinical diagnosis.
-        """
-    )
-
-    st.markdown("---")
-    st.markdown("### 📊 Dataset Information")
-
-    st.markdown(
-        """
-        **Dataset:** Alzheimer MRI (4 Classes)  
-        **Source:** Public medical imaging dataset  
-
-        **Classes:**  
-        - Non-Demented  
-        - Very Mild Demented  
-        - Mild Demented  
-        - Moderate Demented  
-
-        **Note:**  
-        A subset of the dataset was used for training and evaluation
-        due to computational constraints.
-        """
+    page = st.radio(
+        "Navigation",
+        ["Dashboard", "Upload MRI", "Patient History", "About System"]
     )
 
 # ======================================================
@@ -144,40 +67,6 @@ class_names = [
     "Mild Demented",
     "Moderate Demented"
 ]
-
-# ======================================================
-# MAIN TITLE
-# ======================================================
-st.title("Explainable AI-Based Alzheimer’s Disease Detection")
-st.write(
-    "This application analyzes brain MRI images using deep learning "
-    "and provides visual explanations to support transparency."
-)
-
-# ======================================================
-# UPLOAD SECTION
-# ======================================================
-st.markdown("## 1️⃣ Upload Brain MRI")
-
-st.info(
-    "📌 Upload a **single axial brain MRI image** (JPG/PNG).\n\n"
-    "Best results are obtained with clear, centered MRI slices."
-)
-
-uploaded_file = st.file_uploader(
-    "Drag and drop MRI image here or click to browse",
-    type=["jpg", "png", "jpeg"]
-)
-
-analyze_clicked = st.button("🔍 Analyze MRI", use_container_width=True)
-
-# ======================================================
-# IMAGE VALIDATION (Basic MRI Check)
-# ======================================================
-def is_likely_mri(img):
-    img_gray = np.array(img.convert("L"))
-    mean_intensity = img_gray.mean()
-    return mean_intensity < 200  # MRI images are usually darker
 
 # ======================================================
 # IMAGE PREPROCESSING
@@ -216,7 +105,7 @@ def make_gradcam_heatmap(img_array, model, last_conv_layer_name="top_conv"):
     return heatmap.numpy()
 
 # ======================================================
-# LIME (Stable Yellow Explanation)
+# LIME
 # ======================================================
 def lime_predict(images):
     images = np.array(images) / 255.0
@@ -247,81 +136,210 @@ def generate_lime_explanation(img):
     return lime_result
 
 # ======================================================
-# MAIN LOGIC WITH LOADING SPINNER
+# DASHBOARD
 # ======================================================
-if uploaded_file is not None and analyze_clicked:
-    with st.spinner("🧠 Analyzing MRI scan... Please wait"):
-        img = Image.open(uploaded_file)
+if page == "Dashboard":
 
-        if not is_likely_mri(img):
-            st.error(
-                "❌ The uploaded image does not appear to be a brain MRI.\n\n"
-                "Please upload a valid axial brain MRI image."
-            )
-            st.stop()
+    st.title("🧠 Alzheimer AI Dashboard")
 
-        st.markdown("## 2️⃣ MRI Preview")
-        st.image(img, use_column_width=True)
+    try:
+        history = pd.read_csv("database/patient_records.csv")
 
-        processed_img = preprocess_image(img)
+        total_scans = len(history)
+        total_patients = history["patient_id"].nunique()
+        most_common = history["prediction"].mode()[0]
 
-        preds = model.predict(processed_img)
-        predicted_class = class_names[np.argmax(preds)]
-        confidence = float(np.max(preds))
+    except:
+        total_scans = 0
+        total_patients = 0
+        most_common = "N/A"
 
-        # ---------------- Prediction Summary ----------------
-        st.markdown("## 🧾 Prediction Summary")
+    col1, col2, col3 = st.columns(3)
 
-        col1, col2 = st.columns(2)
+    col1.metric("Total Scans", total_scans)
+    col2.metric("Total Patients", total_patients)
+    col3.metric("Most Common Stage", most_common)
 
-        with col1:
-            st.metric("Predicted Alzheimer Stage", predicted_class)
+    st.info(
+        "AI-powered MRI analysis platform using transfer learning and explainable AI."
+    )
 
-        with col2:
-            st.metric("Confidence Score", f"{confidence:.2f}")
+# ======================================================
+# UPLOAD MRI PAGE
+# ======================================================
+if page == "Upload MRI":
 
-        # ---------------- Probabilities ----------------
-        with st.expander("📊 View Class Probabilities"):
-            for i, cls in enumerate(class_names):
-                st.progress(float(preds[0][i]))
-                st.write(f"{cls}: {preds[0][i]:.2f}")
+    st.title("Upload Brain MRI")
 
-        # ---------------- Explainability ----------------
-        st.markdown("## 🔍 Explainable AI Visualizations")
+    # Patient information
+    st.subheader("Patient Information")
 
-        tab1, tab2 = st.tabs(["Grad-CAM", "LIME"])
+    patient_id = st.text_input("Patient ID")
+    patient_name = st.text_input("Patient Name")
+    age = st.number_input("Age", 1, 120)
+    gender = st.selectbox("Gender", ["Male", "Female", "Other"])
 
-        with tab1:
-            heatmap = make_gradcam_heatmap(processed_img, model)
+    uploaded_file = st.file_uploader(
+        "Upload MRI image",
+        type=["jpg", "png", "jpeg"]
+    )
+
+    analyze = st.button("Analyze MRI")
+
+    if uploaded_file and analyze:
+
+        with st.spinner("Analyzing MRI..."):
+
+            img = Image.open(uploaded_file)
+            st.image(img, caption="Uploaded MRI")
+
+            processed = preprocess_image(img)
+
+            preds = model.predict(processed)
+            predicted_class = class_names[np.argmax(preds)]
+            confidence = float(np.max(preds))
+
+            st.subheader("Prediction Result")
+
+            col1, col2 = st.columns(2)
+
+            col1.metric("Predicted Stage", predicted_class)
+            col2.metric("Confidence", f"{confidence:.2f}")
+
+            # ============================
+            # Save patient record
+            # ============================
+
+            record = {
+                "patient_id": patient_id,
+                "patient_name": patient_name,
+                "age": age,
+                "gender": gender,
+                "prediction": predicted_class,
+                "confidence": confidence,
+                "date": datetime.now()
+            }
+
+            df = pd.DataFrame([record])
+
+            try:
+                df.to_csv(
+                    "database/patient_records.csv",
+                    mode="a",
+                    header=False,
+                    index=False
+                )
+            except:
+                df.to_csv(
+                    "database/patient_records.csv",
+                    index=False
+                )
+
+            # ============================
+            # Grad-CAM
+            # ============================
+
+            st.subheader("Grad-CAM Visualization")
+
+            heatmap = make_gradcam_heatmap(processed, model)
             heatmap = cv2.resize(heatmap, (224, 224))
             heatmap = np.uint8(255 * heatmap)
+
             heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_TURBO)
             heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
 
             img_rgb = img.convert("RGB").resize((224, 224))
             img_array = np.array(img_rgb).astype("float32")
 
-            superimposed_img = heatmap * 0.7 + img_array * 0.6
-            superimposed_img = np.clip(superimposed_img, 0, 255).astype("uint8")
+            superimposed = heatmap * 0.7 + img_array * 0.6
+            superimposed = np.clip(superimposed, 0, 255).astype("uint8")
 
-            st.image(
-                superimposed_img,
-                caption="Grad-CAM highlights regions influencing prediction",
-                use_column_width=True
-            )
+            st.image(superimposed)
 
-        with tab2:
+            # ============================
+            # LIME
+            # ============================
+
+            st.subheader("LIME Explanation")
+
             lime_result = generate_lime_explanation(img)
-            st.image(
-                lime_result,
-                caption="LIME shows locally influential regions",
-                use_column_width=True
+            st.image(lime_result)
+
+            # ============================
+            # Download Report
+            # ============================
+
+            report_text = f"""
+Alzheimer MRI Analysis Report
+
+Patient ID: {patient_id}
+Patient Name: {patient_name}
+Age: {age}
+Gender: {gender}
+
+Prediction: {predicted_class}
+Confidence: {confidence}
+
+Generated by Alzheimer AI Platform
+"""
+
+            st.download_button(
+                "Download MRI Report",
+                report_text,
+                file_name="MRI_Report.txt"
             )
+
+            # ============================
+            # Explanation Section
+            # ============================
+
+            st.markdown("---")
+            st.subheader("Explainable AI Interpretation")
+
+            st.markdown("""
+**Grad-CAM**
+
+Grad-CAM highlights the brain regions that most influenced the model's prediction.
+
+**LIME**
+
+LIME explains the prediction by analyzing which image segments contribute
+positively to the classification.
+""")
+
+# ======================================================
+# HISTORY PAGE
+# ======================================================
+if page == "Patient History":
+
+    st.title("Patient Scan History")
+
+    try:
+        history = pd.read_csv("database/patient_records.csv")
+        st.dataframe(history)
+
+    except:
+        st.warning("No patient records available.")
+
+# ======================================================
+# ABOUT PAGE
+# ======================================================
+if page == "About System":
+
+    st.title("About This System")
+
+    st.write(
+        """
+        This system detects Alzheimer’s disease stages from brain MRI images
+        using deep learning and explainable AI techniques.
+
+        Model: Transfer Learning CNN  
+        Explainability: Grad-CAM + LIME
+        """
+    )
 
 # ======================================================
 # FOOTER
 # ======================================================
 st.markdown("---")
-st.caption(
-    "© 2026 | Explainable AI for Alzheimer’s Disease | Academic Project"
-)
+st.caption("© 2026 Alzheimer AI Platform | Academic Project")
