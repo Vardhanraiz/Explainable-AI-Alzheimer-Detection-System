@@ -7,3 +7,5 @@ pandas
 lime
 scikit-image
 matplotlib
+streamlit-authenticator
+bcrypt
