@@ -1,0 +1,19 @@
+credentials:
+  usernames:
+    doctor1:
+      email: doctor1@email.com
+      name: Dr. John
+      password: abc123
+    doctor2:
+      email: doctor2@email.com
+      name: Dr. Smith
+      password: xyz123
+
+cookie:
+  expiry_days: 1
+  key: some_signature_key
+  name: some_cookie_name
+
+preauthorized:
+  emails:
+    - doctor@email.com
