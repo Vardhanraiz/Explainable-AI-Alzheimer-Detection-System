@@ -3,38 +3,40 @@ import tensorflow as tf
 import numpy as np
 import cv2
 import pandas as pd
+import matplotlib.pyplot as plt
 from PIL import Image
 from datetime import datetime
-import matplotlib.pyplot as plt
 
 from lime import lime_image
 from skimage.segmentation import mark_boundaries
 
-# --------------------------------------------------
+# ---------------------------------------------------
 # PAGE CONFIG
-# --------------------------------------------------
+# ---------------------------------------------------
 
 st.set_page_config(
     page_title="Alzheimer AI Platform",
     layout="wide"
 )
 
-# --------------------------------------------------
+# ---------------------------------------------------
 # LOGIN SYSTEM
-# --------------------------------------------------
+# ---------------------------------------------------
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
+
 
 def login():
     if username == "doctor1" and password == "1234":
         st.session_state.logged_in = True
     else:
-        st.error("Invalid username or password")
+        st.error("Invalid credentials")
+
 
 if not st.session_state.logged_in:
 
-    st.title("Alzheimer AI Login")
+    st.title("🧠 Alzheimer AI Platform")
 
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
@@ -43,9 +45,9 @@ if not st.session_state.logged_in:
 
     st.stop()
 
-# --------------------------------------------------
+# ---------------------------------------------------
 # SIDEBAR NAVIGATION
-# --------------------------------------------------
+# ---------------------------------------------------
 
 page = st.sidebar.radio(
     "Navigation",
@@ -57,13 +59,14 @@ page = st.sidebar.radio(
     ]
 )
 
-# --------------------------------------------------
+# ---------------------------------------------------
 # LOAD MODEL
-# --------------------------------------------------
+# ---------------------------------------------------
 
 @st.cache_resource
 def load_model():
     return tf.keras.models.load_model("model/alzheimer_model.h5")
+
 
 model = load_model()
 
@@ -74,23 +77,23 @@ class_names = [
     "Moderate Demented"
 ]
 
-# --------------------------------------------------
-# PREPROCESS IMAGE
-# --------------------------------------------------
+# ---------------------------------------------------
+# IMAGE PREPROCESS
+# ---------------------------------------------------
 
 def preprocess_image(img):
 
     img = img.convert("RGB")
-    img = img.resize((224,224))
+    img = img.resize((224, 224))
 
     img_array = np.array(img) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
 
     return img_array
 
-# --------------------------------------------------
-# GRAD-CAM
-# --------------------------------------------------
+# ---------------------------------------------------
+# GRAD CAM
+# ---------------------------------------------------
 
 def make_gradcam_heatmap(img_array, model):
 
@@ -107,7 +110,7 @@ def make_gradcam_heatmap(img_array, model):
 
     grads = tape.gradient(class_channel, conv_outputs)
 
-    pooled_grads = tf.reduce_mean(grads, axis=(0,1,2))
+    pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
 
     conv_outputs = conv_outputs[0]
 
@@ -119,21 +122,20 @@ def make_gradcam_heatmap(img_array, model):
 
     return heatmap.numpy()
 
-# --------------------------------------------------
+# ---------------------------------------------------
 # LIME
-# --------------------------------------------------
+# ---------------------------------------------------
 
 def lime_predict(images):
-
     images = np.array(images) / 255.0
-
     return model.predict(images)
+
 
 def generate_lime(img):
 
     explainer = lime_image.LimeImageExplainer()
 
-    img_rgb = img.convert("RGB").resize((224,224))
+    img_rgb = img.convert("RGB").resize((224, 224))
 
     img_array = np.array(img_rgb)
 
@@ -150,15 +152,17 @@ def generate_lime(img):
         num_features=5
     )
 
-    return mark_boundaries(temp/255.0, mask)
+    lime_img = mark_boundaries(temp / 255.0, mask)
 
-# --------------------------------------------------
+    return lime_img
+
+# ---------------------------------------------------
 # DASHBOARD
-# --------------------------------------------------
+# ---------------------------------------------------
 
 if page == "Dashboard":
 
-    st.title("Alzheimer AI Dashboard")
+    st.title("📊 Alzheimer AI Dashboard")
 
     try:
 
@@ -178,19 +182,25 @@ if page == "Dashboard":
 
     col1, col2, col3 = st.columns(3)
 
-    col1.metric("Total Scans", total_scans)
+    col1.metric("Total MRI Scans", total_scans)
     col2.metric("Total Patients", total_patients)
     col3.metric("Most Common Stage", most_common)
 
-    st.info("AI platform for Alzheimer detection from MRI images")
+    if total_scans > 0:
 
-# --------------------------------------------------
+        st.subheader("Prediction Distribution")
+
+        chart = history["prediction"].value_counts()
+
+        st.bar_chart(chart)
+
+# ---------------------------------------------------
 # UPLOAD MRI
-# --------------------------------------------------
+# ---------------------------------------------------
 
 if page == "Upload MRI":
 
-    st.title("Upload Brain MRI")
+    st.title("🧠 MRI Scan Analysis")
 
     st.subheader("Patient Information")
 
@@ -201,101 +211,105 @@ if page == "Upload MRI":
 
     gender = st.selectbox(
         "Gender",
-        ["Male","Female","Other"]
+        ["Male", "Female", "Other"]
     )
 
     uploaded_file = st.file_uploader(
-        "Upload MRI image",
-        type=["jpg","png","jpeg"]
+        "Upload MRI Image",
+        type=["jpg", "png", "jpeg"]
     )
 
     analyze = st.button("Analyze MRI")
 
     if uploaded_file and analyze:
 
-        img = Image.open(uploaded_file)
+        with st.spinner("Analyzing MRI scan..."):
 
-        st.image(img)
+            img = Image.open(uploaded_file)
 
-        processed = preprocess_image(img)
+            st.image(img, caption="Uploaded MRI")
 
-        preds = model.predict(processed)
+            processed = preprocess_image(img)
 
-        predicted_class = class_names[np.argmax(preds)]
+            preds = model.predict(processed)
 
-        confidence = float(np.max(preds))
+            predicted_class = class_names[np.argmax(preds)]
 
-        st.subheader("Prediction Result")
+            confidence = float(np.max(preds))
 
-        col1, col2 = st.columns(2)
+            col1, col2 = st.columns(2)
 
-        col1.metric("Stage", predicted_class)
-        col2.metric("Confidence", f"{confidence:.2f}")
+            col1.metric("Predicted Stage", predicted_class)
+            col2.metric("Confidence", f"{confidence:.2f}")
 
-        # probability chart
+            # probability chart
 
-        fig, ax = plt.subplots()
+            st.subheader("Prediction Probability")
 
-        ax.bar(class_names, preds[0])
+            fig, ax = plt.subplots()
 
-        st.pyplot(fig)
+            ax.bar(class_names, preds[0])
 
-        # save patient record
+            ax.set_ylabel("Probability")
 
-        record = {
+            st.pyplot(fig)
 
-            "patient_id":patient_id,
-            "patient_name":patient_name,
-            "age":age,
-            "gender":gender,
-            "prediction":predicted_class,
-            "confidence":confidence,
-            "date":datetime.now()
+            # save patient record
 
-        }
+            record = {
 
-        df = pd.DataFrame([record])
+                "patient_id": patient_id,
+                "patient_name": patient_name,
+                "age": age,
+                "gender": gender,
+                "prediction": predicted_class,
+                "confidence": confidence,
+                "date": datetime.now()
 
-        df.to_csv(
-            "database/patient_records.csv",
-            mode="a",
-            header=False,
-            index=False
-        )
+            }
 
-        # GradCAM
+            df = pd.DataFrame([record])
 
-        st.subheader("Grad-CAM")
+            df.to_csv(
+                "database/patient_records.csv",
+                mode="a",
+                header=False,
+                index=False
+            )
 
-        heatmap = make_gradcam_heatmap(processed, model)
+            # GradCAM
 
-        heatmap = cv2.resize(heatmap,(224,224))
+            st.subheader("Grad-CAM Explanation")
 
-        heatmap = np.uint8(255 * heatmap)
+            heatmap = make_gradcam_heatmap(processed, model)
 
-        heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_TURBO)
+            heatmap = cv2.resize(heatmap, (224, 224))
 
-        img_rgb = img.resize((224,224))
+            heatmap = np.uint8(255 * heatmap)
 
-        img_array = np.array(img_rgb).astype("float32")
+            heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_TURBO)
 
-        result = heatmap*0.7 + img_array*0.6
+            img_resized = img.resize((224, 224))
 
-        result = np.clip(result,0,255).astype("uint8")
+            img_array = np.array(img_resized).astype("float32")
 
-        st.image(result)
+            result = heatmap * 0.7 + img_array * 0.6
 
-        # LIME
+            result = np.clip(result, 0, 255).astype("uint8")
 
-        st.subheader("LIME Explanation")
+            st.image(result)
 
-        lime_img = generate_lime(img)
+            # LIME
 
-        st.image(lime_img)
+            st.subheader("LIME Explanation")
 
-        # report
+            lime_img = generate_lime(img)
 
-        report = f"""
+            st.image(lime_img)
+
+            # report
+
+            report = f"""
 
 Patient ID: {patient_id}
 
@@ -305,17 +319,19 @@ Prediction: {predicted_class}
 
 Confidence: {confidence}
 
+Generated by Alzheimer AI Platform
+
 """
 
-        st.download_button(
-            "Download MRI Report",
-            report,
-            file_name="report.txt"
-        )
+            st.download_button(
+                "Download MRI Report",
+                report,
+                file_name="MRI_Report.txt"
+            )
 
-# --------------------------------------------------
+# ---------------------------------------------------
 # PATIENT HISTORY
-# --------------------------------------------------
+# ---------------------------------------------------
 
 if page == "Patient History":
 
@@ -329,23 +345,36 @@ if page == "Patient History":
 
     except:
 
-        st.warning("No patient records yet.")
+        st.warning("No patient records yet")
 
-# --------------------------------------------------
-# ABOUT PAGE
-# --------------------------------------------------
+# ---------------------------------------------------
+# ABOUT
+# ---------------------------------------------------
 
 if page == "About System":
 
-    st.title("About")
+    st.title("About This Platform")
 
     st.write(
         """
-This system detects Alzheimer’s disease stages
-using deep learning and explainable AI.
+This system detects Alzheimer’s disease stages from brain MRI images
+using deep learning and explainable AI techniques.
 
-Model: Transfer Learning CNN
+Technologies Used:
 
-Explainability: Grad-CAM and LIME
+• Transfer Learning CNN  
+• Grad-CAM Visualization  
+• LIME Explainability  
+• Streamlit Interactive Dashboard
 """
     )
+
+# ---------------------------------------------------
+# FOOTER
+# ---------------------------------------------------
+
+st.markdown("---")
+
+st.caption(
+    "© 2026 Alzheimer AI Platform | Explainable AI Research Project"
+)
