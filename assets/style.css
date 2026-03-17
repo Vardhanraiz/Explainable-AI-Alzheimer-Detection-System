@@ -1,0 +1,38 @@
+/* Background */
+
+.stApp {
+    background-color: #f5f7fb;
+}
+
+/* Main title */
+
+h1 {
+    color: #1f4e79;
+}
+
+/* Card style */
+
+div[data-testid="metric-container"] {
+    background-color: white;
+    border: 1px solid #e6e6e6;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0px 3px 6px rgba(0,0,0,0.1);
+}
+
+/* Buttons */
+
+.stButton>button {
+    background-color: #1f77b4;
+    color: white;
+    border-radius: 8px;
+    height: 3em;
+    width: 100%;
+}
+
+/* Sidebar */
+
+section[data-testid="stSidebar"] {
+    background-color: #1f4e79;
+    color: white;
+}
