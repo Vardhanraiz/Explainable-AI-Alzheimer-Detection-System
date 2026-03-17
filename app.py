@@ -65,7 +65,7 @@ page = st.sidebar.radio(
 
 @st.cache_resource
 def load_model():
-    return tf.keras.models.load_model("model/alzheimer_model.h5")
+    return tf.keras.models.load_model("alzheimer_model.h5")
 
 
 model = load_model()
